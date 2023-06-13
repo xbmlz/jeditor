@@ -1,4 +1,4 @@
-package io.xbmlz.jeditor.ui;
+package io.xbmlz.jeditor;
 
 import com.formdev.flatlaf.fonts.jetbrains_mono.FlatJetBrainsMonoFont;
 import com.formdev.flatlaf.util.FontUtils;
@@ -49,9 +49,9 @@ public class EditorPane extends JPanel {
         Font font = createEditorFont(0);
 
         textArea.setFont(font);
-//        textArea.setBackground(UIManager.getColor("EditorPane.background"));
-//        textArea.setCaretColor(UIManager.getColor("EditorPane.caretColor"));
-//        textArea.setSelectionColor(UIManager.getColor("EditorPane.selectionBackground"));
+        textArea.setBackground(UIManager.getColor("EditorPane.background"));
+        textArea.setCaretColor(UIManager.getColor("EditorPane.caretColor"));
+        textArea.setSelectionColor(UIManager.getColor("EditorPane.selectionBackground"));
 //        textArea.setCurrentLineHighlightColor(UIManager.getColor("EditorPane.currentLineHighlight"));
 //        textArea.setMarkAllHighlightColor(UIManager.getColor("EditorPane.markAllHighlightColor"));
 //        textArea.setMarkOccurrencesColor(UIManager.getColor("EditorPane.markOccurrencesColor"));

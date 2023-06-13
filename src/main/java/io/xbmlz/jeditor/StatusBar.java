@@ -1,4 +1,4 @@
-package io.xbmlz.jeditor.ui;
+package io.xbmlz.jeditor;
 
 import net.miginfocom.swing.MigLayout;
 

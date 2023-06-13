@@ -1,4 +1,4 @@
-package io.xbmlz.jeditor.ui;
+package io.xbmlz.jeditor;
 
 import org.fife.ui.rsyntaxtextarea.TextEditorPane;
 

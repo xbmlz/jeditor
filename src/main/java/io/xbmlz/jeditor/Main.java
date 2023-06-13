@@ -2,8 +2,8 @@ package io.xbmlz.jeditor;
 
 import com.formdev.flatlaf.FlatLaf;
 import com.formdev.flatlaf.FlatLightLaf;
+import com.formdev.flatlaf.extras.FlatUIDefaultsInspector;
 import com.formdev.flatlaf.fonts.jetbrains_mono.FlatJetBrainsMonoFont;
-import io.xbmlz.jeditor.ui.MainFrame;
 
 import javax.swing.*;
 import java.awt.*;
@@ -16,11 +16,10 @@ public class Main {
     public static void main(String[] args) {
 
         SwingUtilities.invokeLater(() -> {
-            FlatLightLaf.setup();
             FlatJetBrainsMonoFont.installLazy();
-//            System.setProperty("flatlaf.useWindowDecorations", "false");
-
-
+            FlatUIDefaultsInspector.install("ctrl shift alt Y");
+            FlatLaf.registerCustomDefaultsSource( "io.xbmlz.jeditor" );
+            FlatLightLaf.setup();
             MainFrame frame = new MainFrame();
             frame.setPreferredSize(new Dimension(800, 600));
             frame.pack();

@@ -1,4 +1,4 @@
-package io.xbmlz.jeditor.ui;
+package io.xbmlz.jeditor;
 
 import com.formdev.flatlaf.extras.FlatSVGIcon;
 import com.formdev.flatlaf.extras.FlatSVGUtils;
@@ -31,7 +31,7 @@ public class MainFrame extends JFrame {
 
     private void initComponents() {
         setTitle("JEditor");
-        setIconImages(FlatSVGUtils.createWindowIconImages("/icons/logo.svg"));
+        setIconImages(FlatSVGUtils.createWindowIconImages("/io/xbmlz/jeditor/icons/logo.svg"));
         setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         // content panel
         Container contentPane = getContentPane();
