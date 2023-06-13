@@ -2,6 +2,7 @@ package io.xbmlz.jeditor;
 
 import com.formdev.flatlaf.FlatLaf;
 import com.formdev.flatlaf.FlatLightLaf;
+import com.formdev.flatlaf.fonts.jetbrains_mono.FlatJetBrainsMonoFont;
 import io.xbmlz.jeditor.ui.MainFrame;
 
 import javax.swing.*;
@@ -16,7 +17,7 @@ public class Main {
 
         SwingUtilities.invokeLater(() -> {
             FlatLightLaf.setup();
-
+            FlatJetBrainsMonoFont.installLazy();
 //            System.setProperty("flatlaf.useWindowDecorations", "false");
 
 

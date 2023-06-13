@@ -15,6 +15,7 @@
         <flatlaf.version>3.1</flatlaf.version>
         <rsyntaxtextarea.version>3.3.3</rsyntaxtextarea.version>
         <miglayout.version>5.3</miglayout.version>
+        <jetbrains-mono.version>2.242</jetbrains-mono.version>
     </properties>
 
     <dependencies>
@@ -22,6 +23,11 @@
             <groupId>com.formdev</groupId>
             <artifactId>flatlaf</artifactId>
             <version>${flatlaf.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf-fonts-jetbrains-mono</artifactId>
+            <version>${jetbrains-mono.version}</version>
         </dependency>
         <dependency>
             <groupId>com.formdev</groupId>
