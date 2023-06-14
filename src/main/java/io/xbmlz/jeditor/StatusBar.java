@@ -1,13 +1,9 @@
 package io.xbmlz.jeditor;
 
-import net.miginfocom.layout.ConstraintParser;
-import net.miginfocom.layout.LC;
-import net.miginfocom.layout.UnitValue;
 import net.miginfocom.swing.MigLayout;
 
 import javax.swing.*;
 import javax.swing.border.Border;
-import java.awt.*;
 
 public class StatusBar extends JPanel {
 
@@ -21,7 +17,6 @@ public class StatusBar extends JPanel {
 
     private JLabel cursorPositionLabel;
 
-
     public StatusBar() {
         initComponents();
 
@@ -30,7 +25,7 @@ public class StatusBar extends JPanel {
     private void initComponents() {
         Border border = BorderFactory.createMatteBorder(1, 0, 0, 0, UIManager.getColor("Component.borderColor"));
         setBorder(border);
-        setLayout(new MigLayout("insets 2", "[grow,fill][fill][fill][fill]fill", "[]")    );
+        setLayout(new MigLayout("insets 4", "20[grow,fill][fill]20[fill]20[fill]20", "[]"));
         fileTypeLabel = new JLabel("Plain Text");
         endOfLineLabel = new JLabel("LF");
         encodingLabel = new JLabel("UTF-8");
