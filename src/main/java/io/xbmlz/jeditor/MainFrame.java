@@ -1,5 +1,6 @@
 package io.xbmlz.jeditor;
 
+import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLaf;
 import com.formdev.flatlaf.FlatLightLaf;
@@ -12,15 +13,22 @@ import com.formdev.flatlaf.fonts.jetbrains_mono.FlatJetBrainsMonoFont;
 import com.formdev.flatlaf.ui.FlatUIUtils;
 import com.formdev.flatlaf.util.StringUtils;
 import com.formdev.flatlaf.util.UIScale;
+import net.miginfocom.swing.MigLayout;
 
 import javax.swing.*;
+import javax.swing.border.Border;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import java.awt.*;
-import java.awt.event.KeyEvent;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
+import java.awt.event.*;
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.charset.Charset;
+import java.time.Year;
 import java.util.Locale;
+import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import java.util.prefs.Preferences;
@@ -67,6 +75,8 @@ public class MainFrame extends JFrame {
 
     private JMenuItem deleteMenuItem;
 
+    private JMenuItem findAndReplaceMenuItem;
+
     private JMenu viewMenu;
 
     private JMenu themeMenuItem;
@@ -77,13 +87,29 @@ public class MainFrame extends JFrame {
 
     private JMenuItem resetZoomMenuItem;
 
+    private JMenu helpMenu;
+
+    private JMenuItem aboutMenuItem;
+
     private FlatTabbedPane fileTabbedPane;
 
     private JButton addTabButton;
 
+    private JLabel languageLabel;
+
+    private JLabel lineSeparatorLabel;
+
+    private JLabel encodingLabel;
+
+    private JLabel fileInfoLabel;
+
+    private JLabel cursorPositionLabel;
+
     private Preferences state;
 
     private EditorPane selectedEditorPane;
+
+    private JPanel statusBarPanel;
 
     private int tabIndex = 1;
 
@@ -124,7 +150,6 @@ public class MainFrame extends JFrame {
 
 
     private void initComponents() {
-
         // content panel
         Container contentPane = getContentPane();
         contentPane.setLayout(new BorderLayout());
@@ -216,6 +241,14 @@ public class MainFrame extends JFrame {
         deleteMenuItem.setMnemonic('D');
         deleteMenuItem.addActionListener(e -> delete());
         editMenu.add(deleteMenuItem);
+        // separator
+        editMenu.addSeparator();
+        // find and replace ctrl+f
+        findAndReplaceMenuItem = new JMenuItem("Find/Replace");
+        findAndReplaceMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F, Toolkit.getDefaultToolkit().getMenuShortcutKeyMask()));
+        findAndReplaceMenuItem.setMnemonic('F');
+        findAndReplaceMenuItem.addActionListener(e -> find());
+        editMenu.add(findAndReplaceMenuItem);
         menuBar.add(editMenu);
 
         // view menu
@@ -235,8 +268,8 @@ public class MainFrame extends JFrame {
         flatDarkMenuItem.setMnemonic('D');
         flatDarkMenuItem.addActionListener(e -> setTheme("Flat Dark"));
         themeButtonGroup.add(flatDarkMenuItem);
-        if( UIManager.getLookAndFeel() instanceof FlatDarkLaf )
-            flatDarkMenuItem.setSelected( true );
+        if (UIManager.getLookAndFeel() instanceof FlatDarkLaf)
+            flatDarkMenuItem.setSelected(true);
         themeMenuItem.add(flatDarkMenuItem);
         viewMenu.add(themeMenuItem);
 
@@ -262,10 +295,17 @@ public class MainFrame extends JFrame {
         viewMenu.add(resetZoomMenuItem);
         menuBar.add(viewMenu);
 
-        setJMenuBar(menuBar);
+        // help menu
+        helpMenu = new JMenu("Help");
+        helpMenu.setMnemonic('H');
+        // about
+        aboutMenuItem = new JMenuItem("About");
+        aboutMenuItem.setMnemonic('A');
+        aboutMenuItem.addActionListener(e -> about());
+        helpMenu.add(aboutMenuItem);
+        menuBar.add(helpMenu);
 
-        StatusBar statusBar = new StatusBar();
-        contentPane.add(statusBar, BorderLayout.SOUTH);
+        setJMenuBar(menuBar);
 
         // tabbed pane
         fileTabbedPane = new FlatTabbedPane();
@@ -285,7 +325,112 @@ public class MainFrame extends JFrame {
         trailingToolBar.add(addTabButton);
         fileTabbedPane.setTrailingComponent(trailingToolBar);
         contentPane.add(fileTabbedPane, BorderLayout.CENTER);
+
+        // status bar
+        statusBarPanel = new JPanel(new MigLayout("insets 4", "15[grow,fill][fill]20[fill]20[fill]15", "[]"));
+        Border border = BorderFactory.createMatteBorder(1, 0, 0, 0, UIManager.getColor("Component.borderColor"));
+        statusBarPanel.setBorder(border);
+        languageLabel = new JLabel("Plain Text");
+        lineSeparatorLabel = new JLabel("CRLF");
+        encodingLabel = new JLabel("UTF-8");
+        fileInfoLabel = new JLabel("Length 0, Lines 0");
+        cursorPositionLabel = new JLabel("Ln 0, Col 0, Pos 0");
+        statusBarPanel.add(languageLabel, "cell 0 0");
+        statusBarPanel.add(fileInfoLabel, "cell 1 0");
+        statusBarPanel.add(cursorPositionLabel, "cell 2 0");
+        statusBarPanel.add(lineSeparatorLabel, "cell 3 0");
+        statusBarPanel.add(encodingLabel, "cell 4 0");
+        contentPane.add(statusBarPanel, BorderLayout.SOUTH);
+
+        // goto line:column
+        cursorPositionLabel.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                gotoLineColumn();
+            }
+        });
+
+        // line separator menu
+        buildLineSeparatorPopupMenu();
+        // line separator
+        buildLineSeparatorPopupMenu();
+        // encoding
+        buildEncodingPopupMenu();
+        // language
+        buildLanguagePopupMenu();
+
         addEmptyTab();
+    }
+
+    private void buildLineSeparatorPopupMenu() {
+        JPopupMenu popupMenu = new JPopupMenu("Line Separator");
+        ButtonGroup buttonGroup = new ButtonGroup();
+        for (Map.Entry<String, String> entry : Constants.LINE_SEPARATOR_MAP.entrySet()) {
+            JRadioButtonMenuItem menuItem = new JRadioButtonMenuItem(entry.getKey());
+            menuItem.addActionListener(e -> setLineSeparator(entry.getValue()));
+            if (entry.getKey().equals("Windows (\\r\\n)")) menuItem.setSelected(true);
+            buttonGroup.add(menuItem);
+            popupMenu.add(menuItem);
+        }
+        addLabelPopupMenuMouseEvent(lineSeparatorLabel, popupMenu, statusBarPanel);
+        lineSeparatorLabel.setComponentPopupMenu(popupMenu);
+    }
+
+    private void buildEncodingPopupMenu() {
+        JPopupMenu popupMenu = new JPopupMenu("Encoding");
+        ButtonGroup buttonGroup = new ButtonGroup();
+        for (String encoding : Constants.ENCODINGS) {
+            JRadioButtonMenuItem menuItem = new JRadioButtonMenuItem(encoding);
+            menuItem.addActionListener(e -> setEncoding(Charset.forName(encoding)));
+            if (encoding.equals("UTF-8")) menuItem.setSelected(true);
+            buttonGroup.add(menuItem);
+            popupMenu.add(menuItem);
+        }
+        addLabelPopupMenuMouseEvent(encodingLabel, popupMenu, statusBarPanel);
+        encodingLabel.setComponentPopupMenu(popupMenu);
+    }
+
+    private void buildLanguagePopupMenu() {
+        JPopupMenu popupMenu = new JPopupMenu("Language");
+        ButtonGroup buttonGroup = new ButtonGroup();
+        for (Map.Entry<String, String> entry : Constants.LANGUAGE_SYNTAX_MAP.entrySet()) {
+            JRadioButtonMenuItem menuItem = new JRadioButtonMenuItem(entry.getKey());
+            menuItem.addActionListener(e -> setLanguage(entry.getValue()));
+            if (entry.getKey().equals("Plain Text")) menuItem.setSelected(true);
+            buttonGroup.add(menuItem);
+            popupMenu.add(menuItem);
+        }
+        addLabelPopupMenuMouseEvent(languageLabel, popupMenu, statusBarPanel);
+        languageLabel.setComponentPopupMenu(popupMenu);
+    }
+
+    private void setLanguage(String val) {
+        selectedEditorPane.setLanguage(val);
+        languageLabel.setText(Utils.getMapFirstKey(Constants.LANGUAGE_SYNTAX_MAP, val));
+    }
+
+    private void setEncoding(Charset charset) {
+        selectedEditorPane.setCharset(charset);
+        encodingLabel.setText(charset.name());
+    }
+
+    private void gotoLineColumn() {
+        int line = selectedEditorPane.getTextArea().getCaretLineNumber() + 1;
+        int column = selectedEditorPane.getTextArea().getCaretOffsetFromLineStart() + 1;
+        String res = (String) JOptionPane.showInputDialog(
+                this,
+                "[Line][:Column]",
+                "Go to Line:Column",
+                JOptionPane.PLAIN_MESSAGE,
+                null,
+                null,
+                line + ":" + column);
+        if (res != null)
+            selectedEditorPane.gotoLineColumn(res);
+    }
+
+    private void find() {
+        selectedEditorPane.showFindReplaceBar(true);
     }
 
     private void setTheme(String light) {
@@ -315,7 +460,6 @@ public class MainFrame extends JFrame {
     }
 
     private void exit() {
-        // TODO is saved
         saveWindowBounds();
         System.exit(0);
     }
@@ -357,7 +501,7 @@ public class MainFrame extends JFrame {
     }
 
     private void printFile() {
-        // TODO
+        selectedEditorPane.print();
     }
 
     private void newFile() {
@@ -381,6 +525,7 @@ public class MainFrame extends JFrame {
                 ex.printStackTrace();
             }
             addTab(file.getName(), editorPane, null, file.getAbsolutePath(), true);
+            setLanguage(getLanguageSyntax(file.getName()));
         }
     }
 
@@ -407,6 +552,11 @@ public class MainFrame extends JFrame {
             fileTabbedPane.setTitleAt(fileTabbedPane.getSelectedIndex(), file.getName());
             fileTabbedPane.setToolTipTextAt(fileTabbedPane.getSelectedIndex(), file.getAbsolutePath());
         }
+    }
+
+    private void setLineSeparator(String eof) {
+        lineSeparatorLabel.setText(Utils.getMapFirstKey(Constants.LINE_SEPARATOR_MAP, eof));
+        selectedEditorPane.setLineSeparator(eof);
     }
 
     private void addEmptyTab() {
@@ -445,12 +595,121 @@ public class MainFrame extends JFrame {
                 fileTabbedPane.setTitleAt(index, titleFun.get());
             }
         });
+        editorPane.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                setFileInfoLabel(editorPane.getText().length(), editorPane.getLineCount());
+            }
+        });
+        editorPane.getTextArea().addCaretListener(e -> {
+            int dot = e.getDot();
+            int lineOfOffset = editorPane.getLineOfOffset(dot);
+            int columnOfOffset = editorPane.getColumnOfOffset(dot, lineOfOffset);
+            int pos = dot + 1;
+            boolean isSelection = e.getMark() != dot;
+            if (isSelection) {
+                pos = editorPane.getSelectText().length();
+            }
+            setCursorPositionLabel(lineOfOffset, columnOfOffset, pos, isSelection);
+        });
         fileTabbedPane.addTab(tabName, icon, editorPane, tip);
         if (isSelect) fileTabbedPane.setSelectedComponent(editorPane);
     }
 
+    private String getLanguageSyntax(String fileName) {
+        String suffix = fileName.substring(fileName.lastIndexOf(".") + 1);
+        String style;
+        switch (suffix) {
+            case "txt":
+                style = "text/plain";
+                break;
+            case "pas":
+                style = "text/delphi";
+                break;
+            case "go":
+                style = "text/golang";
+                break;
+            case "js":
+                style = "text/javascript";
+                break;
+            case "jsonc":
+            case "json5":
+                style = "text/json";
+                break;
+            case "kt":
+                style = "text/kotlin";
+                break;
+            case "md":
+                style = "text/markdown";
+                break;
+            case "py":
+                style = "text/python";
+                break;
+            case "rb":
+                style = "text/ruby";
+                break;
+            case "ts":
+                style = "text/typescript";
+                break;
+            case "sh":
+                style = "text/unix";
+                break;
+            default:
+                style = "text/" + suffix;
+                break;
+        }
+        return style;
+    }
+
+    private void setFileType(String type) {
+        languageLabel.setText(type);
+    }
+
+    private void setFileInfoLabel(int length, int lines) {
+        String info = String.format("Length %d, Lines %d", length, lines);
+        fileInfoLabel.setText(info);
+    }
+
+    private void setCursorPositionLabel(int line, int column, int position, boolean isSelection) {
+        String info = String.format("Ln %d, Col %d, Pos %d", line, column, position);
+        if (isSelection) {
+            info = String.format("Ln %d, Col %d, Sel %d", line, column, position);
+        }
+        cursorPositionLabel.setText(info);
+    }
+
     private void selectedTabChanged() {
         this.selectedEditorPane = (EditorPane) fileTabbedPane.getSelectedComponent();
+        String lineSeparator = System.getProperty("line.separator");
+        String encoding = "UTF-8";
+        if (selectedEditorPane.getFile() != null) {
+            lineSeparator = this.selectedEditorPane.getLineSeparator();
+            encoding = selectedEditorPane.getEncoding();
+        }
+        // set encoding
+        setEncoding(Charset.forName(encoding));
+        // set line separator
+        setLineSeparator(lineSeparator);
+        // set length and lines
+        setFileInfoLabel(selectedEditorPane.getText().length(), selectedEditorPane.getLineCount());
+        // set cursor position
+        int dot = selectedEditorPane.getTextArea().getCaret().getDot();
+        int lineOfOffset = selectedEditorPane.getLineOfOffset(dot);
+        int columnOfOffset = selectedEditorPane.getColumnOfOffset(dot, lineOfOffset);
+        int pos = dot + 1;
+        boolean isSelection = selectedEditorPane.getTextArea().getCaret().getMark() != dot;
+        if (isSelection) {
+            pos = selectedEditorPane.getSelectText().length();
+        }
+        setCursorPositionLabel(lineOfOffset, columnOfOffset, pos, isSelection);
     }
 
     private void applyFontSizeIncr(int sizeIncr) {
@@ -462,6 +721,37 @@ public class MainFrame extends JFrame {
         for (EditorPane editorPane : getEditorPanes())
             editorPane.updateFontSize(sizeIncr);
         state.putInt(KEY_FONT_SIZE_INCR, sizeIncr);
+    }
+
+    private void about() {
+        JLabel titleLabel = new JLabel("JEditor");
+        titleLabel.putClientProperty(FlatClientProperties.STYLE_CLASS, "h1");
+
+        String link = "https://github.com/xbmlz/jeditor";
+        JLabel linkLabel = new JLabel("<html><a href=\"#\">" + link + "</a></html>");
+        linkLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        linkLabel.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                try {
+                    Desktop.getDesktop().browse(new URI(link));
+                } catch (IOException | URISyntaxException ex) {
+                    JOptionPane.showMessageDialog(linkLabel,
+                            "Failed to open '" + link + "' in browser.",
+                            "About", JOptionPane.PLAIN_MESSAGE);
+                }
+            }
+        });
+
+        JOptionPane.showMessageDialog(this,
+                new Object[]{
+                        titleLabel,
+                        "A modern text editor for developers. Support Windows, Linux and Mac.",
+                        " ",
+                        "Copyright 2019-" + Year.now() + " xbmlz",
+                        linkLabel,
+                },
+                "About", JOptionPane.PLAIN_MESSAGE);
     }
 
     private EditorPane[] getEditorPanes() {
@@ -480,7 +770,23 @@ public class MainFrame extends JFrame {
     }
 
     private void saveState() {
+        // TODO
+    }
 
+    private void addLabelPopupMenuMouseEvent(JLabel label, JPopupMenu menu, JPanel container) {
+        label.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                showPopupMenu(e);
+            }
+
+            private void showPopupMenu(MouseEvent e) {
+                int x = label.getX() - menu.getPreferredSize().width / 2;
+                int y = label.getY() - menu.getPreferredSize().height;
+                menu.setMaximumSize(new Dimension(200, 50));
+                menu.show(container, x, y);
+            }
+        });
     }
 
     private void restoreWindowBounds() {

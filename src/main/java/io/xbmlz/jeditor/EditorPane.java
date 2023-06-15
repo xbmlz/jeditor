@@ -9,17 +9,25 @@ import org.fife.ui.rsyntaxtextarea.TextEditorPane;
 import org.fife.ui.rtextarea.Gutter;
 import org.fife.ui.rtextarea.RTextArea;
 import org.fife.ui.rtextarea.RTextScrollPane;
+import org.fife.ui.rtextarea.SearchContext;
 
 import javax.swing.*;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.event.HyperlinkListener;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.Document;
 import java.awt.*;
+import java.awt.print.PrinterException;
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.logging.Logger;
 
 public class EditorPane extends JPanel implements HyperlinkListener {
+
+    private final static Logger LOGGER = Logger.getLogger(EditorPane.class.getName());
 
     static final String DIRTY_PROPERTY = TextEditorPane.DIRTY_PROPERTY;
 
@@ -31,14 +39,20 @@ public class EditorPane extends JPanel implements HyperlinkListener {
 
     private final ErrorStrip errorStrip;
 
+    private static boolean findReplaceVisible;
+
+    private static SearchContext findReplaceContext;
+
+    private FindReplaceBar findReplaceBar;
+
     private File file;
 
     public EditorPane() {
         super(new BorderLayout());
         textArea = new SyntaxTextArea();
         LanguageSupportFactory.get().register(textArea);
-//        textArea.requestFocusInWindow();
-//        textArea.setCaretPosition(0);
+        textArea.requestFocusInWindow();
+        textArea.setCaretPosition(0);
         textArea.setMarkOccurrences(true);
         textArea.setCodeFoldingEnabled(true);
         textArea.addHyperlinkListener(this);
@@ -48,8 +62,7 @@ public class EditorPane extends JPanel implements HyperlinkListener {
         ToolTipManager.sharedInstance().registerComponent(textArea);
 
         // create text area
-        JLayer<SyntaxTextArea> overlay = new JLayer<>(textArea, new EditorOverlay());
-        scrollPane = new RTextScrollPane(overlay);
+        scrollPane = new RTextScrollPane(textArea, true);
         scrollPane.setBorder(BorderFactory.createEmptyBorder());
         scrollPane.setLineNumbersEnabled(true);
 
@@ -79,7 +92,6 @@ public class EditorPane extends JPanel implements HyperlinkListener {
         textArea.setPaintMatchedBracketPair(true);
         textArea.setAnimateBracketMatching(false);
 
-        // TODO syntax
 //        textArea.setSyntaxScheme();
 
         // gutter
@@ -120,7 +132,6 @@ public class EditorPane extends JPanel implements HyperlinkListener {
         this.file = file;
         // TODO custom charset
         textArea.load(FileLocation.create(file), StandardCharsets.UTF_8);
-        setSyntaxStyle();
     }
 
     boolean save() {
@@ -173,68 +184,132 @@ public class EditorPane extends JPanel implements HyperlinkListener {
         textArea.replaceSelection("");
     }
 
+    void print() {
+        try {
+            textArea.print();
+        } catch (PrinterException e) {
+            JOptionPane.showMessageDialog(this,
+                    "Failed to print '" + textArea.getFileName() + "'\n\nReason: " + e.getMessage(),
+                    getWindowTitle(), JOptionPane.WARNING_MESSAGE);
+            throw new RuntimeException(e);
+        }
+    }
+
     void updateFontSize(int sizeIncr) {
         Font font = createEditorFont(sizeIncr);
         textArea.setFont(font);
         scrollPane.getGutter().setLineNumberFont(font);
     }
 
+    String getText() {
+        return textArea.getText();
+    }
+
+    int getLineCount() {
+        return textArea.getLineCount();
+    }
+
+    int getLineOfOffset(int dot) {
+        try {
+            return textArea.getLineOfOffset(dot) + 1;
+        } catch (BadLocationException e) {
+            LOGGER.warning(e.getMessage());
+            return -1;
+        }
+    }
+
+    int getColumnOfOffset(int dot, int lineOffset) {
+        try {
+            return dot - textArea.getLineStartOffset(lineOffset - 1) + 1;
+        } catch (BadLocationException e) {
+            LOGGER.warning(e.getMessage());
+            return -1;
+        }
+    }
+
+    String getSelectText() {
+        return textArea.getSelectedText();
+    }
+
     File getFile() {
         return file;
     }
 
-    public void setSyntaxStyle() {
-        String fileName = file.getName();
-        String suffix = fileName.substring(file.getName().lastIndexOf(".") + 1);
-        String style;
-        switch (suffix) {
-            case "txt":
-                style = "text/plain";
-                break;
-            case "pas":
-                style = "text/delphi";
-                break;
-            case "go":
-                style = "text/golang";
-                break;
-            case "js":
-                style = "text/javascript";
-                break;
-            case "jsonc":
-            case "json5":
-                style = "text/json";
-                break;
-            case "kt":
-                style = "text/kotlin";
-                break;
-            case "md":
-                style = "text/markdown";
-                break;
-            case "py":
-                style = "text/python";
-                break;
-            case "rb":
-                style = "text/ruby";
-                break;
-            case "ts":
-                style = "text/typescript";
-                break;
-            case "sh":
-                style = "text/unix";
-                break;
-            default:
-                style = "text/" + suffix;
-                break;
-        }
-        textArea.setSyntaxEditingStyle(style);
+    Document getDocument() {
+        return textArea.getDocument();
     }
 
+    SyntaxTextArea getTextArea() {
+        return textArea;
+    }
 
-    /**
-     * Called when a hypertext link is updated.
-     *
-     * @param e the event responsible for the update
-     */
+    void setFileEncoding(String encoding) {
+        textArea.setEncoding(encoding);
+    }
+
+    void setLineSeparator(String eol) {
+        textArea.setLineSeparator(eol);
+    }
+
+    void showFindReplaceBar(boolean findEditorSelection) {
+        if (findReplaceBar == null) {
+            findReplaceBar = new FindReplaceBar(textArea);
+            findReplaceBar.addPropertyChangeListener(FindReplaceBar.PROP_CLOSED, e -> {
+                findReplaceVisible = false;
+                textArea.requestFocusInWindow();
+            });
+            editorPanel.add(findReplaceBar, BorderLayout.SOUTH);
+            editorPanel.revalidate();
+        }
+
+        findReplaceVisible = true;
+        if (findReplaceContext == null)
+            findReplaceContext = findReplaceBar.getSearchContext();
+        else
+            findReplaceBar.setSearchContext(findReplaceContext);
+
+        findReplaceBar.setVisible(true);
+        findReplaceBar.activate(findEditorSelection);
+    }
+
+    void hideFindReplaceBar() {
+        if (findReplaceBar != null)
+            findReplaceBar.setVisible(false);
+    }
+
+    void selected() {
+        if (findReplaceVisible)
+            showFindReplaceBar(false);
+        else
+            hideFindReplaceBar();
+    }
+
+    void gotoLineColumn(String res) {
+        try {
+            String[] arr = res.split(":");
+            if (arr.length == 1)
+                // only set line
+                textArea.setCaretPosition(textArea.getLineStartOffset(Integer.parseInt(arr[0]) - 1));
+            if (arr.length == 2)
+                // set line and column
+                textArea.setCaretPosition(textArea.getLineStartOffset(Integer.parseInt(arr[0]) - 1) + Integer.parseInt(arr[1]) - 1);
+        } catch (BadLocationException e) {
+            LOGGER.warning(e.getMessage());
+        }
+    }
+
+    String getLineSeparator() {
+        return textArea.getLineSeparator().toString();
+    }
+
+    void setCharset(Charset charset) {
+        textArea.setEncoding(charset.name());
+    }
+
+    String getEncoding() {
+        return textArea.getEncoding();
+    }
+
     @Override
     public void hyperlinkUpdate(HyperlinkEvent e) {
         if (e.getEventType() == HyperlinkEvent.EventType.ACTIVATED) {
@@ -255,5 +330,9 @@ public class EditorPane extends JPanel implements HyperlinkListener {
     @Override
     public boolean requestFocusInWindow() {
         return textArea.requestFocusInWindow();
+    }
+
+    public void setLanguage(String s) {
+        textArea.setSyntaxEditingStyle(s);
     }
 }
