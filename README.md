@@ -12,6 +12,6 @@
   🚧Work in progress🚧
 </p>
 
-![light](https://raw.githubusercontent.com/xbmlz/jeditor/main/screenshots/light.jpg)
+![light](https://raw.githubusercontent.com/xbmlz/jeditor/main/screenshots/flat-light.jpg)
 
-![dark](https://raw.githubusercontent.com/xbmlz/jeditor/main/screenshots/dark.jpg)
+![dark](https://raw.githubusercontent.com/xbmlz/jeditor/main/screenshots/flat-dark.jpg)
