@@ -12,10 +12,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Setup JDK
-        uses: joschi/setup-jdk@v2
+      - name: Setup Java 11
+        uses: actions/setup-java@v3
         with:
-          java-version: 8
+          java-version: 11
+          distribution: adopt
 
       - name: Update version
         run: mvn versions:set -DnewVersion=${GITHUB_REF#refs/tags/}
@@ -30,3 +31,6 @@ jobs:
           files: target/*.jar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        permissions:
+          contents: write
+        prerelease: true

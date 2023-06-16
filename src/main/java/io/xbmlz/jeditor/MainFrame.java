@@ -4,14 +4,15 @@ import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLaf;
 import com.formdev.flatlaf.FlatLightLaf;
-import com.formdev.flatlaf.extras.FlatInspector;
-import com.formdev.flatlaf.extras.FlatSVGIcon;
-import com.formdev.flatlaf.extras.FlatSVGUtils;
-import com.formdev.flatlaf.extras.FlatUIDefaultsInspector;
+import com.formdev.flatlaf.extras.*;
 import com.formdev.flatlaf.extras.components.FlatTabbedPane;
+import com.formdev.flatlaf.fonts.inter.FlatInterFont;
 import com.formdev.flatlaf.fonts.jetbrains_mono.FlatJetBrainsMonoFont;
+import com.formdev.flatlaf.fonts.roboto.FlatRobotoFont;
+import com.formdev.flatlaf.fonts.roboto_mono.FlatRobotoMonoFont;
 import com.formdev.flatlaf.ui.FlatUIUtils;
 import com.formdev.flatlaf.util.StringUtils;
+import com.formdev.flatlaf.util.SystemInfo;
 import com.formdev.flatlaf.util.UIScale;
 import net.miginfocom.swing.MigLayout;
 
@@ -20,6 +21,10 @@ import javax.swing.border.Border;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import java.awt.*;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.dnd.DnDConstants;
+import java.awt.dnd.DropTarget;
+import java.awt.dnd.DropTargetDropEvent;
 import java.awt.event.*;
 import java.io.File;
 import java.io.IOException;
@@ -27,8 +32,10 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.Charset;
 import java.time.Year;
+import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import java.util.prefs.Preferences;
@@ -111,7 +118,7 @@ public class MainFrame extends JFrame {
 
     private JPanel statusBarPanel;
 
-    private int tabIndex = 1;
+    private int emptyTabIndex = 1;
 
     public MainFrame() {
         addWindowListener(new WindowAdapter() {
@@ -127,13 +134,61 @@ public class MainFrame extends JFrame {
         setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 
         initComponents();
+
+        // macOS  (see https://www.formdev.com/flatlaf/macos/)
+        if (SystemInfo.isMacOS) {
+            // hide menu items that are in macOS application menu
+            exitMenuItem.setVisible(false);
+            aboutMenuItem.setVisible(false);
+
+            if (SystemInfo.isMacFullWindowContentSupported) {
+                // expand window content into window title bar and make title bar transparent
+                getRootPane().putClientProperty("apple.awt.fullWindowContent", true);
+                getRootPane().putClientProperty("apple.awt.transparentTitleBar", true);
+
+                // hide window title
+                if (SystemInfo.isJava_17_orLater)
+                    getRootPane().putClientProperty("apple.awt.windowTitleVisible", false);
+                else
+                    setTitle(null);
+
+            }
+
+            // enable full screen mode for this window (for Java 8 - 10; not necessary for Java 11+)
+            if (!SystemInfo.isJava_11_orLater)
+                getRootPane().putClientProperty("apple.awt.fullscreenable", true);
+        }
+
+        // integrate into macOS screen menu
+        FlatDesktop.setAboutHandler(this::about);
+        FlatDesktop.setQuitHandler(response -> {
+            if (!saveAll()) {
+                response.cancelQuit();
+                return;
+            }
+            saveWindowBounds();
+            response.performQuit();
+        });
+    }
+
+    private boolean saveAll() {
+        for (int i = 0; i < fileTabbedPane.getTabCount(); i++) {
+            EditorPane editorPane = (EditorPane) fileTabbedPane.getComponentAt(i);
+            if (!editorPane.save())
+                return false;
+        }
+        return true;
     }
 
     public static void launch() {
         Locale.setDefault(Locale.ENGLISH);
         System.setProperty("user.language", "en");
         SwingUtilities.invokeLater(() -> {
+            FlatInterFont.installLazy();
             FlatJetBrainsMonoFont.installLazy();
+            FlatRobotoFont.installLazy();
+            FlatRobotoMonoFont.installLazy();
+
             FlatLaf.registerCustomDefaultsSource("themes");
             try {
                 String laf = Preferences.userRoot().node(PREFS_ROOT_PATH).get(KEY_LAF, FlatLightLaf.class.getName());
@@ -160,25 +215,25 @@ public class MainFrame extends JFrame {
         fileMenu.setMnemonic('F');
         // new file
         newMenuItem = new JMenuItem("New");
-        newMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_N, Toolkit.getDefaultToolkit().getMenuShortcutKeyMask()));
+        newMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_N, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         newMenuItem.setMnemonic('N');
         newMenuItem.addActionListener(e -> newFile());
         fileMenu.add(newMenuItem);
         // open file
         openMenuItem = new JMenuItem("Open");
-        openMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_O, Toolkit.getDefaultToolkit().getMenuShortcutKeyMask()));
+        openMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_O, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         openMenuItem.setMnemonic('O');
         openMenuItem.addActionListener(e -> openFile());
         fileMenu.add(openMenuItem);
         // save file
         saveMenuItem = new JMenuItem("Save");
-        saveMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_S, Toolkit.getDefaultToolkit().getMenuShortcutKeyMask()));
+        saveMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_S, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         saveMenuItem.setMnemonic('S');
         saveMenuItem.addActionListener(e -> saveFile());
         fileMenu.add(saveMenuItem);
         // save as file
         saveAsMenuItem = new JMenuItem("Save As");
-        saveAsMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_S, Toolkit.getDefaultToolkit().getMenuShortcutKeyMask() | KeyEvent.SHIFT_DOWN_MASK));
+        saveAsMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_S, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx() | KeyEvent.SHIFT_DOWN_MASK));
         saveAsMenuItem.setMnemonic('A');
         saveAsMenuItem.addActionListener(e -> saveAsFile());
         fileMenu.add(saveAsMenuItem);
@@ -186,7 +241,7 @@ public class MainFrame extends JFrame {
         fileMenu.addSeparator();
         // print file
         printMenuItem = new JMenuItem("Print");
-        printMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_P, Toolkit.getDefaultToolkit().getMenuShortcutKeyMask()));
+        printMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_P, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         printMenuItem.setMnemonic('P');
         printMenuItem.addActionListener(e -> printFile());
         fileMenu.add(printMenuItem);
@@ -194,7 +249,7 @@ public class MainFrame extends JFrame {
         fileMenu.addSeparator();
         // exit
         exitMenuItem = new JMenuItem("Exit");
-        exitMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_Q, Toolkit.getDefaultToolkit().getMenuShortcutKeyMask()));
+        exitMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_Q, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         exitMenuItem.setMnemonic('x');
         exitMenuItem.addActionListener(e -> exit());
         fileMenu.add(exitMenuItem);
@@ -205,13 +260,13 @@ public class MainFrame extends JFrame {
         editMenu.setMnemonic('E');
         // undo ctrl+z
         undoMenuItem = new JMenuItem("Undo");
-        undoMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_Z, Toolkit.getDefaultToolkit().getMenuShortcutKeyMask()));
+        undoMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_Z, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         undoMenuItem.setMnemonic('U');
         undoMenuItem.addActionListener(e -> undo());
         editMenu.add(undoMenuItem);
         // redo ctrl+shift+z
         redoMenuItem = new JMenuItem("Redo");
-        redoMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_Z, Toolkit.getDefaultToolkit().getMenuShortcutKeyMask() | KeyEvent.SHIFT_DOWN_MASK));
+        redoMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_Z, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx() | KeyEvent.SHIFT_DOWN_MASK));
         redoMenuItem.setMnemonic('R');
         redoMenuItem.addActionListener(e -> redo());
         editMenu.add(redoMenuItem);
@@ -219,19 +274,19 @@ public class MainFrame extends JFrame {
         editMenu.addSeparator();
         // cut ctrl+x
         cutMenuItem = new JMenuItem("Cut");
-        cutMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_X, Toolkit.getDefaultToolkit().getMenuShortcutKeyMask()));
+        cutMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_X, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         cutMenuItem.setMnemonic('t');
         cutMenuItem.addActionListener(e -> cut());
         editMenu.add(cutMenuItem);
         // copy ctrl+c
         copyMenuItem = new JMenuItem("Copy");
-        copyMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_C, Toolkit.getDefaultToolkit().getMenuShortcutKeyMask()));
+        copyMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_C, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         copyMenuItem.setMnemonic('C');
         copyMenuItem.addActionListener(e -> copy());
         editMenu.add(copyMenuItem);
         // paste ctrl+v
         pasteMenuItem = new JMenuItem("Paste");
-        pasteMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_V, Toolkit.getDefaultToolkit().getMenuShortcutKeyMask()));
+        pasteMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_V, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         pasteMenuItem.setMnemonic('P');
         pasteMenuItem.addActionListener(e -> paste());
         editMenu.add(pasteMenuItem);
@@ -245,7 +300,7 @@ public class MainFrame extends JFrame {
         editMenu.addSeparator();
         // find and replace ctrl+f
         findAndReplaceMenuItem = new JMenuItem("Find/Replace");
-        findAndReplaceMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F, Toolkit.getDefaultToolkit().getMenuShortcutKeyMask()));
+        findAndReplaceMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         findAndReplaceMenuItem.setMnemonic('F');
         findAndReplaceMenuItem.addActionListener(e -> find());
         editMenu.add(findAndReplaceMenuItem);
@@ -277,19 +332,19 @@ public class MainFrame extends JFrame {
         viewMenu.addSeparator();
         // zoom in ctrl+mouse wheel up or ctrl++
         zoomInMenuItem = new JMenuItem("Zoom In");
-        zoomInMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_ADD, Toolkit.getDefaultToolkit().getMenuShortcutKeyMask()));
+        zoomInMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_ADD, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         zoomInMenuItem.setMnemonic('I');
         zoomInMenuItem.addActionListener(e -> zoomIn());
         viewMenu.add(zoomInMenuItem);
         // zoom out ctrl+mouse wheel down or ctrl+-
         zoomOutMenuItem = new JMenuItem("Zoom Out");
-        zoomOutMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_SUBTRACT, Toolkit.getDefaultToolkit().getMenuShortcutKeyMask()));
+        zoomOutMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_SUBTRACT, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         zoomOutMenuItem.setMnemonic('O');
         zoomOutMenuItem.addActionListener(e -> zoomOut());
         viewMenu.add(zoomOutMenuItem);
         // reset zoom ctrl+0
         resetZoomMenuItem = new JMenuItem("Reset");
-        resetZoomMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_0, Toolkit.getDefaultToolkit().getMenuShortcutKeyMask()));
+        resetZoomMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_0, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         resetZoomMenuItem.setMnemonic('R');
         resetZoomMenuItem.addActionListener(e -> resetZoom());
         viewMenu.add(resetZoomMenuItem);
@@ -362,6 +417,52 @@ public class MainFrame extends JFrame {
         addEmptyTab();
     }
 
+    private void buildTabPopupMenu() {
+        JPopupMenu popupMenu = new JPopupMenu();
+        JMenuItem closeMenuItem = new JMenuItem("Close");
+        closeMenuItem.addActionListener(e -> removeTab(fileTabbedPane, fileTabbedPane.getSelectedIndex()));
+        closeMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_W, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
+        popupMenu.add(closeMenuItem);
+        JMenuItem closeOthersMenuItem = new JMenuItem("Close Others");
+        closeOthersMenuItem.addActionListener(e -> removeOtherTabs());
+        popupMenu.add(closeOthersMenuItem);
+        JMenuItem closeAllMenuItem = new JMenuItem("Close All");
+        closeAllMenuItem.addActionListener(e -> removeAllTabs());
+        popupMenu.add(closeAllMenuItem);
+        fileTabbedPane.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if (SwingUtilities.isRightMouseButton(e)) {
+                    showPopupMenu(e);
+                }
+            }
+
+            private void showPopupMenu(MouseEvent e) {
+                int index = fileTabbedPane.indexAtLocation(e.getX(), e.getY());
+                if (index != -1) {
+                    fileTabbedPane.setSelectedIndex(index);
+                    popupMenu.show(fileTabbedPane, e.getX(), e.getY());
+                }
+            }
+        });
+    }
+
+    private void removeAllTabs() {
+        int tabCount = fileTabbedPane.getTabCount();
+        for (int i = tabCount - 1; i >= 0; i--) {
+            removeTab(fileTabbedPane, i);
+        }
+    }
+
+    private void removeOtherTabs() {
+        int tabCount = fileTabbedPane.getTabCount();
+        for (int i = tabCount - 1; i >= 0; i--) {
+            if (i != fileTabbedPane.getSelectedIndex()) {
+                removeTab(fileTabbedPane, i);
+            }
+        }
+    }
+
     private void buildLineSeparatorPopupMenu() {
         JPopupMenu popupMenu = new JPopupMenu("Line Separator");
         ButtonGroup buttonGroup = new ButtonGroup();
@@ -393,12 +494,27 @@ public class MainFrame extends JFrame {
     private void buildLanguagePopupMenu() {
         JPopupMenu popupMenu = new JPopupMenu("Language");
         ButtonGroup buttonGroup = new ButtonGroup();
+
+        // 按照首字母分组
+        Map<String, java.util.List<String>> map = new TreeMap<>();
         for (Map.Entry<String, String> entry : Constants.LANGUAGE_SYNTAX_MAP.entrySet()) {
-            JRadioButtonMenuItem menuItem = new JRadioButtonMenuItem(entry.getKey());
-            menuItem.addActionListener(e -> setLanguage(entry.getValue()));
-            if (entry.getKey().equals("Plain Text")) menuItem.setSelected(true);
-            buttonGroup.add(menuItem);
-            popupMenu.add(menuItem);
+            String key = entry.getKey().substring(0, 1);
+            if (!map.containsKey(key)) {
+                map.put(key, new ArrayList<>());
+            }
+            map.get(key).add(entry.getKey());
+        }
+        // 添加菜单项
+        for (Map.Entry<String, java.util.List<String>> entry : map.entrySet()) {
+            JMenu menu = new JMenu(entry.getKey());
+            for (String language : entry.getValue()) {
+                JRadioButtonMenuItem menuItem = new JRadioButtonMenuItem(language);
+                menuItem.addActionListener(e -> setLanguage(Constants.LANGUAGE_SYNTAX_MAP.get(language)));
+                if (language.equals("Plain Text")) menuItem.setSelected(true);
+                buttonGroup.add(menuItem);
+                menu.add(menuItem);
+            }
+            popupMenu.add(menu);
         }
         addLabelPopupMenuMouseEvent(languageLabel, popupMenu, statusBarPanel);
         languageLabel.setComponentPopupMenu(popupMenu);
@@ -525,7 +641,6 @@ public class MainFrame extends JFrame {
                 ex.printStackTrace();
             }
             addTab(file.getName(), editorPane, null, file.getAbsolutePath(), true);
-            setLanguage(getLanguageSyntax(file.getName()));
         }
     }
 
@@ -560,7 +675,7 @@ public class MainFrame extends JFrame {
     }
 
     private void addEmptyTab() {
-        String tabName = "Untitled " + tabIndex++;
+        String tabName = "Untitled " + emptyTabIndex++;
         addTab(tabName, new EditorPane(), null, tabName, true);
     }
 
@@ -577,12 +692,12 @@ public class MainFrame extends JFrame {
                     saveAsFile();
             } else if (result == JOptionPane.NO_OPTION) {
                 tabPane.remove(tabIndex);
-                if (editorPane.getFile() == null) this.tabIndex--;
+                if (editorPane.getFile() == null) this.emptyTabIndex--;
                 if (tabPane.getTabCount() == 0) addEmptyTab();
             }
         } else {
             tabPane.remove(tabIndex);
-            if (editorPane.getFile() == null) this.tabIndex--;
+            if (editorPane.getFile() == null) this.emptyTabIndex--;
             if (tabPane.getTabCount() == 0) addEmptyTab();
         }
     }
@@ -595,6 +710,7 @@ public class MainFrame extends JFrame {
                 fileTabbedPane.setTitleAt(index, titleFun.get());
             }
         });
+        // document listener
         editorPane.getDocument().addDocumentListener(new DocumentListener() {
             @Override
             public void insertUpdate(DocumentEvent e) {
@@ -609,6 +725,7 @@ public class MainFrame extends JFrame {
                 setFileInfoLabel(editorPane.getText().length(), editorPane.getLineCount());
             }
         });
+        // caret listener
         editorPane.getTextArea().addCaretListener(e -> {
             int dot = e.getDot();
             int lineOfOffset = editorPane.getLineOfOffset(dot);
@@ -620,8 +737,28 @@ public class MainFrame extends JFrame {
             }
             setCursorPositionLabel(lineOfOffset, columnOfOffset, pos, isSelection);
         });
+        // drag
+        editorPane.getTextArea().setDropTarget(new DropTarget() {
+            @Override
+            public synchronized void drop(DropTargetDropEvent evt) {
+                evt.acceptDrop(DnDConstants.ACTION_COPY);
+                try {
+                    java.util.List<File> droppedFiles = (java.util.List<File>) evt.getTransferable().getTransferData(DataFlavor.javaFileListFlavor);
+                    for (File file : droppedFiles) {
+                        EditorPane editorPane = new EditorPane();
+                        editorPane.load(file);
+                        addTab(file.getName(), editorPane, null, file.getAbsolutePath(), true);
+
+                    }
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
+        });
         fileTabbedPane.addTab(tabName, icon, editorPane, tip);
         if (isSelect) fileTabbedPane.setSelectedComponent(editorPane);
+        setLanguage(getLanguageSyntax(tabName));
+        buildTabPopupMenu();
     }
 
     private String getLanguageSyntax(String fileName) {
@@ -663,7 +800,7 @@ public class MainFrame extends JFrame {
                 style = "text/unix";
                 break;
             default:
-                style = "text/" + suffix;
+                style = "text/plain";
                 break;
         }
         return style;
@@ -700,6 +837,8 @@ public class MainFrame extends JFrame {
         setLineSeparator(lineSeparator);
         // set length and lines
         setFileInfoLabel(selectedEditorPane.getText().length(), selectedEditorPane.getLineCount());
+        // set language
+        setLanguage(getLanguageSyntax(fileTabbedPane.getTitleAt(fileTabbedPane.getSelectedIndex())));
         // set cursor position
         int dot = selectedEditorPane.getTextArea().getCaret().getDot();
         int lineOfOffset = selectedEditorPane.getLineOfOffset(dot);

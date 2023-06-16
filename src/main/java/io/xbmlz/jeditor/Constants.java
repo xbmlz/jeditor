@@ -35,7 +35,6 @@ public interface Constants {
         put("Dockerfile", "text/dockerfile");
         put("Dart", "text/dart");
         put("Pascal", "text/delphi");
-        put("Pascal", "text/delphi");
         put("DTD", "text/dtd");
         put("Fortran", "text/fortran");
         put("Go", "text/golang");
@@ -44,8 +43,8 @@ public interface Constants {
         put("Hosts", "text/hosts");
         put("Htaccess", "text/htaccess");
         put("HTML", "text/html");
-        put("INI", "text/java");
-        put("JavaScript", "text/javascript");
+        put("INI", "text/ini");
+        put("Java", "text/java");
         put("JavaScript", "text/javascript");
         put("JSON", "text/json");
         put("Jshintrc", "text/jshintrc");

@@ -11,3 +11,7 @@
 <p align="center">
   🚧Work in progress🚧
 </p>
+
+![light](https://raw.githubusercontent.com/xbmlz/jeditor/screenshots/light.jpg)
+
+![dark](https://raw.githubusercontent.com/xbmlz/jeditor/screenshots/dark.jpg)
