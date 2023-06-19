@@ -4,7 +4,7 @@ on: [push, pull_request]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -24,7 +24,13 @@ jobs:
         run: mvn clean package -DskipTests
 
       - name: Build native image
-        run: native-image --no-server -jar target/jeditor-${GITHUB_REF#refs/tags/}-jar-with-dependencies.jar
+        run: native-image --no-server -jar target/jeditor-*-jar-with-dependencies.jar
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: jeditor-${GITHUB_REF#refs/tags/}-${{ matrix.os }}-x86_64.exe
+          path: target/jeditor-${GITHUB_REF#refs/tags/}-${{ matrix.os }}-x86_64.exe
 
 #      - name: Create Release
 #        uses: softprops/action-gh-release@v1
