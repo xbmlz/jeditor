@@ -26,16 +26,12 @@ jobs:
       - name: Build native image
         run: native-image --no-server -jar target/jeditor-0.0.1-jar-with-dependencies.jar
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: jeditor-0.0.1.exe
-          path: target/jeditor-0.0.1-jar-with-dependencies.exe
-
-#      - name: Create Release
-#        uses: softprops/action-gh-release@v1
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 #        if: startsWith(github.ref, 'refs/tags/')
-#        with:
-#          files: |
-#            target/jeditor-${GITHUB_REF#refs/tags/}-jar-with-dependencies.jar
-#            target/jeditor-${GITHUB_REF#refs/tags/}-${{ matrix.os }}-x86_64
+        with:
+          draft: true
+          files: |
+            target/jeditor-0.0.1-jar-with-dependencies.exe
