@@ -128,10 +128,16 @@ public class EditorPane extends JPanel implements HyperlinkListener {
         return textArea.isDirty();
     }
 
-    void load(File file) throws IOException {
+    void load(File file) {
         this.file = file;
         // TODO custom charset
-        textArea.load(FileLocation.create(file), StandardCharsets.UTF_8);
+        try {
+            textArea.load(FileLocation.create(file), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            JOptionPane.showMessageDialog(this,
+                    "Failed to load '" + file.getName() + "'\n\nReason: " + e.getMessage(),
+                    getWindowTitle(), JOptionPane.WARNING_MESSAGE);
+        }
     }
 
     boolean save() {

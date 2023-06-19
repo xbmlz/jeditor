@@ -27,6 +27,6 @@ public class Main {
             //  setting it on AWT thread does not work)
             System.setProperty("apple.awt.application.appearance", "system");
         }
-        MainFrame.launch();
+        MainFrame.launch(args);
     }
 }
