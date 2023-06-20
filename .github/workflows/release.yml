@@ -29,7 +29,7 @@ jobs:
       - name: Build native image
         run: | 
           cd target
-          native-image --no-server -jar editor-0.0.1-jar-with-dependencies.jar
+          native-image --no-server -jar jeditor-0.0.3-jar-with-dependencies.jar
           ls
 
       - name: Create Release
