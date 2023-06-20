@@ -1,7 +1,9 @@
 name: Release
 
-on: [push, pull_request]
-
+on:
+  push:
+    tags:
+      - '*'
 jobs:
   build:
     name: Build on ${{ matrix.os }}
