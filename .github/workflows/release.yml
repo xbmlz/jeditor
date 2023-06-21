@@ -24,7 +24,7 @@ jobs:
         run: mvn clean package -DskipTests
 
       - name: Build native image
-        run: native-image --no-server -jar jeditor-0.0.3-jar-with-dependencies.jar
+        run: native-image --no-server -jar target/jeditor-0.0.3-jar-with-dependencies.jar
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
