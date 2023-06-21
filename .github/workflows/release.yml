@@ -6,11 +6,8 @@ on:
       - '*'
 jobs:
   build:
-    name: Build on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: windows-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -27,10 +24,7 @@ jobs:
         run: mvn clean package -DskipTests
 
       - name: Build native image
-        run: | 
-          cd target
-          native-image --no-server -jar jeditor-0.0.3-jar-with-dependencies.jar
-          ls
+        run: native-image --no-server -jar jeditor-0.0.3-jar-with-dependencies.jar
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -40,4 +34,4 @@ jobs:
         with:
           draft: true
           files: |
-            target/jeditor-*
+            target/*.exe
